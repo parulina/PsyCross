@@ -456,5 +456,5 @@ void PsyX_Pad_Vibrate(int mtap, int slot, unsigned char* table, int len)
 	if (freq_high != 0 && freq_high < 4096)
 		freq_high = 4096;
 
-	SDL_GameControllerRumble(controller->gc, freq_low, freq_high, 200);
+	//SDL_GameControllerRumble(controller->gc, freq_low, freq_high, 200);
 }

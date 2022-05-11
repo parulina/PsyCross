@@ -106,10 +106,10 @@ inline long long gte_shift(long long a, int sf) {
 }
 
 int BOUNDS(/*int44*/long long value, int max_flag, int min_flag) {
-	if (value/*.positive_overflow()*/ > (long long)0x7ffffffffff)
+	if (value/*.positive_overflow()*/ > (long long)0x7ffffffffffULL)
 		C2_FLAG |= max_flag;
 
-	if (value/*.negative_overflow()*/ < (long long)-0x8000000000)
+	if (value/*.negative_overflow()*/ < (long long)-0x8000000000ULL)
 		C2_FLAG |= min_flag;
 
 	return int(gte_shift(value/*.value()*/, m_sf));

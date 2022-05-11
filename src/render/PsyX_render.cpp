@@ -9,6 +9,9 @@
 
 #include <assert.h>
 #include <string.h>
+#include <stdint.h>
+#define UINT64_MAX        18446744073709551615ULL
+
 
 #ifdef _WIN32
 #include <windows.h>
@@ -29,8 +32,8 @@ extern "C" {
 #if defined(RENDERER_OGL)
 
 #define USE_PBO					1
-#define USE_OFFSCREEN_BLIT		1
-#define USE_FRAMEBUFFER_BLIT	1
+#define USE_OFFSCREEN_BLIT		0
+#define USE_FRAMEBUFFER_BLIT	0
 
 #else
 
@@ -396,8 +399,8 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 #elif defined(RENDERER_OGL)
 
 	int major_version = 3;
-	int minor_version = 3;
-	int profile = SDL_GL_CONTEXT_PROFILE_CORE;
+	int minor_version = 0;
+	int profile = SDL_GL_CONTEXT_PROFILE_COMPATIBILITY;
 
 	// find best OpenGL version
 	do
@@ -410,12 +413,16 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 			break;
 	
 		minor_version--;
+		if(major_version > 1) {
+			major_version --;
+			minor_version = 5;
+		}
 		
 	} while (minor_version >= 0);
 
 	if (minor_version == -1)
 	{
-		eprinterr("Failed to initialise - OpenGL 3.x is not supported. Please update video drivers.\n");
+		eprinterr("Failed to initialise - OpenGL 2.x is not supported. Please update video drivers.\n");
 		return 0;
 	}
 #endif
@@ -426,12 +433,6 @@ int GR_InitialiseGLContext(char* windowName, int fullscreen)
 
 int GR_InitialiseGLExt()
 {
-#ifndef __EMSCRIPTEN__
-	GLenum err = gladLoadGL();
-
-	if (err == 0)
-		return 0;
-#endif
 	
 	const char* rend = (const char*)glGetString(GL_RENDERER);
 	const char* vendor = (const char*)glGetString(GL_VENDOR);
@@ -594,11 +595,11 @@ GLint u_bilinearFilterLoc;
 #define GPU_DECODE_RG_FUNC\
 	" vec4 decodeRG(float rg) {\n"\
 	" 	vec4 value = fract(floor(rg / vec4(1.0, 32.0, 1024.0, 32768.0)) / 32.0);\n"\
-	" 	return vec4(value.xyz, rg == 0 ? rg : (1.0 - value.w * 16));\n"\
+	" 	return vec4(value.xyz, rg == 0.0 ? rg : (1.0 - value.w * 16.0));\n"\
 	" }\n"
 	//"	vec4 decodeRG(float rg) { return fract(floor(rg / vec4(1.0, 32.0, 1024.0, 32768.0)) / 32.0); }\n"
 
-#if defined(RENDERER_OGL) || (OGLES_VERSION == 3)
+#if (OGLES_VERSION == 3)
 
 #	define GPU_DITHERING\
 		"		fragColor *= v_color;\n"\
@@ -606,9 +607,9 @@ GLint u_bilinearFilterLoc;
 		"			-4.0,  +0.0,  -3.0,  +1.0,\n"\
 		"			+2.0,  -2.0,  +3.0,  -1.0,\n"\
 		"			-3.0,  +1.0,  -4.0,  +0.0,\n"\
-		"			+3.0,  -1.0,  +2.0,  -2.0) / 255.0;\n"\
+		"			+3.0,  -1.0,  +2.0,  -2.0);\n"\
 		"		ivec2 dc = ivec2(fract(gl_FragCoord.xy / 4.0) * 4.0);\n"\
-		"		fragColor.xyz += vec3(dither[dc.x][dc.y] * v_texcoord.w);\n"
+		"		fragColor.xyz += vec3(dither[dc.x][dc.y] / 255.0 * v_texcoord.w);\n"
 
 #	define GPU_ARRAY_FUNC\
 		"	float _idx2(vec2 array, int idx) { return array[idx]; }"
@@ -797,7 +798,6 @@ int GR_Shader_CheckShaderStatus(GLuint shader)
 	if (info[0] && strlen(info) > 8)
 	{
 		eprinterr("%s\n", info);
-		assert(0);
 	}
 
 	return 0;
@@ -817,7 +817,7 @@ int GR_Shader_CheckProgramStatus(GLuint program)
 	if (info[0] && strlen(info) > 8)
 	{
 		eprinterr("%s\n", info);
-		assert(0);
+		//assert(0);
 	}
 
 	return 0;
@@ -825,53 +825,11 @@ int GR_Shader_CheckProgramStatus(GLuint program)
 
 ShaderID GR_Shader_Compile(const char* source)
 {
-#if defined(ES2_SHADERS)
 	const char* GLSL_HEADER_VERT =
-		"#version 100\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
 		"#define VERTEX\n";
 
 	const char* GLSL_HEADER_FRAG =
-		"#version 100\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
 		"#define fragColor gl_FragColor\n";
-#elif defined(ES3_SHADERS)
-	const char* GLSL_HEADER_VERT =
-		"#version 300 es\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
-		"#define VERTEX\n"
-		"#define varying   out\n"
-		"#define attribute in\n"
-		"#define texture2D texture\n";
-
-	const char* GLSL_HEADER_FRAG =
-		"#version 300 es\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
-		"#define varying     in\n"
-		"#define texture2D   texture\n"
-		"out vec4 fragColor;\n";
-#else
-	const char* GLSL_HEADER_VERT =
-		"#version 140\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
-		"#define VERTEX\n"
-		"#define varying   out\n"
-		"#define attribute in\n"
-		"#define texture2D texture\n";
-
-	const char* GLSL_HEADER_FRAG =
-		"#version 140\n"
-		"precision lowp  int;\n"
-		"precision highp float;\n"
-		"#define varying     in\n"
-		"#define texture2D   texture\n"
-		"out vec4 fragColor;\n";
-#endif
 
 	char extra_vs_defines[1024];
 	char extra_fs_defines[1024];
@@ -893,8 +851,11 @@ ShaderID GR_Shader_Compile(const char* source)
 		glShaderSource(vertexShader, 3, vs_list, NULL);
 		glCompileShader(vertexShader);
 
-		if( GR_Shader_CheckShaderStatus(vertexShader) == 0 )
+		if( GR_Shader_CheckShaderStatus(vertexShader) == 0 ) {
 			eprinterr("Failed to compile Vertex Shader!\n");
+			printf(source);
+			//assert(0);
+		}
 	
 		glAttachShader(program, vertexShader);
 		glDeleteShader(vertexShader);
@@ -905,8 +866,11 @@ ShaderID GR_Shader_Compile(const char* source)
 		glShaderSource(fragmentShader, 3, fs_list, NULL);
 		glCompileShader(fragmentShader);
 
-		if(GR_Shader_CheckShaderStatus(fragmentShader) == 0)
+		if(GR_Shader_CheckShaderStatus(fragmentShader) == 0) {
 			eprinterr("Failed to compile Fragment Shader!\n");
+			printf(source);
+			//assert(0);
+		}
 	
 		glAttachShader(program, fragmentShader);
 		glDeleteShader(fragmentShader);
@@ -942,7 +906,7 @@ void GR_GenerateCommonTextures()
 	unsigned int pixelData = 0xFFFFFFFF;
 
 #if defined(USE_OPENGL)
-	glGenTextures(1, &g_whiteTexture);
+	glGenTextures(1, (GLuint*) &g_whiteTexture);
 	{
 		glBindTexture(GL_TEXTURE_2D, g_whiteTexture);
 
@@ -958,7 +922,7 @@ void GR_GenerateCommonTextures()
 TextureID GR_CreateRGBATexture(int width, int height, u_char* data /*= nullptr*/)
 {
 	TextureID newTexture;
-	glGenTextures(1, &newTexture);
+	glGenTextures(1, (GLuint*)&newTexture);
 
 	glBindTexture(GL_TEXTURE_2D, newTexture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, g_cfg_bilinearFiltering ? GL_LINEAR : GL_NEAREST);
@@ -1010,7 +974,7 @@ int GR_InitialisePSX()
 		
 		// make a special texture
 		// it will be resized later
-		glGenTextures(1, &g_fbTexture);
+		glGenTextures(1, (GLuint*)&g_fbTexture);
 		{
 			glBindTexture(GL_TEXTURE_2D, g_fbTexture);
 
@@ -1041,7 +1005,7 @@ int GR_InitialisePSX()
 		PBO_Init(&g_glOffscreenPBO, GL_RGBA, VRAM_WIDTH, VRAM_HEIGHT, 2);
 		
 		// offscreen texture render target
-		glGenTextures(1, &g_offscreenRTTexture);
+		glGenTextures(1, (GLuint*)&g_offscreenRTTexture);
 		{
 			glBindTexture(GL_TEXTURE_2D, g_offscreenRTTexture);
 
@@ -1071,7 +1035,7 @@ int GR_InitialisePSX()
 	{
 		int i;
 
-		glGenTextures(2, g_vramTexturesDouble);
+		glGenTextures(2, (GLuint*)g_vramTexturesDouble);
 
 		for(i = 0; i < 2; i++)
 		{
@@ -1315,7 +1279,7 @@ void GR_DestroyTexture(TextureID texture)
 		return;
 
 #if defined(USE_OPENGL)
-	glDeleteTextures(1, &texture);
+	glDeleteTextures(1, (GLuint*)&texture);
 #else
 #error
 #endif

@@ -19,6 +19,24 @@
 #   include <SDL.h>
 #endif
 
+
+
+#define BIGENDIAN
+
+#ifdef BIGENDIAN
+#if defined(__APPLE__)
+#include <libkern/OSByteOrder.h>
+#define BSWAP16(x) OSSwapInt16(x)
+#define BSWAP32(x) OSSwapInt32(x)
+#else // __APPLE__
+#define BSWAP16(x) __builtin_bswap16(x)
+#define BSWAP32(x) __builtin_bswap32(x)
+#endif // __APPLE__
+#else // BIGENDIAN
+#define BSWAP16(x) (x)
+#define BSWAP32(x) (x)
+#endif // BIGENDIAN
+
 //-----------------------------------------------------------------------
 
 #ifdef _MSC_VER
